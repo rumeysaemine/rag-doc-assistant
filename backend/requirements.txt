@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+psycopg2-binary
+pydantic-settings
+pydantic
+python-dotenv
+requests
+python-multipart 
+pgvector
+sentence-transformers
+transformers
+torch==2.8.0
+google-generativeai
