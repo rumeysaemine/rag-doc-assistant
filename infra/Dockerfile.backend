@@ -1,0 +1,27 @@
+# Base image
+FROM python:3.11-slim
+
+# Çalışma dizini
+WORKDIR /app
+
+# Gerekli sistem bağımlılıkları
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    libgomp1 \ 
+    libjpeg-dev \ 
+    zlib1g \        
+    git \
+    git-lfs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Gereken paketleri yükle
+COPY ../backend/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Kodları kopyala
+COPY ../backend .
+
+# FastAPI uygulaması başlatma (uvicorn)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
