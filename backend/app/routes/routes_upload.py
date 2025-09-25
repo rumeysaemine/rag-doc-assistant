@@ -8,6 +8,9 @@ from app.models.document import Document
 from app.models.chunk import Chunk
 from app.services.chunking import chunk_text
 from app.services.embeddings import get_embedding
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+import io
 
 router = APIRouter()
 UPLOAD_DIR = "uploaded_docs"
@@ -17,30 +20,43 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 
+def read_file_content(file: UploadFile):
+    """
+    Dosya uzantısına göre içeriği okur ve metin olarak döndürür.
+    Desteklenen türler: .txt, .pdf, .docx
+    """
+    try:
+        if file.filename.endswith(".pdf"):
+            pdf_reader = PdfReader(file.file)
+            content = ""
+            for page in pdf_reader.pages:
+                content += page.extract_text() or ""
+            return content
+        elif file.filename.endswith(".docx"):
+            doc = DocxDocument(io.BytesIO(file.file.read()))
+            content = ""
+            for para in doc.paragraphs:
+                content += para.text + "\n"
+            return content
+        elif file.filename.endswith(".txt"):
+            return file.file.read().decode("utf-8")
+        else:
+            raise ValueError("Desteklenmeyen dosya formatı.")
+    except Exception as e:
+        logger.error(f"Dosya okuma hatası: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Dosya içeriği okunamadı: {file.filename}. Hata: {str(e)}"
+        )
+
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(file: UploadFile, db: AsyncSession = Depends(get_db)):
     """
-    Yüklenen TXT dosyasını işler, parçalara ayırır,
+    Yüklenen dosyayı işler, parçalara ayırır,
     embedding oluşturur ve veritabanına kaydeder.
     """
-    if not file.filename.endswith(".txt"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yalnızca .txt formatındaki dosyalar kabul edilir."
-        )
-
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-
-    # Dosyayı sunucuya kaydet
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        logger.error(f"Dosya kaydetme hatası: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Dosya sunucuya kaydedilemedi."
-        )
+    # Dosya içeriğini oku
+    content = read_file_content(file)
 
     # Veritabanına yeni bir doküman kaydı oluştur
     try:
@@ -59,9 +75,9 @@ async def upload_document(file: UploadFile, db: AsyncSession = Depends(get_db)):
     
     # Dosya içeriğini oku ve chunk'lara ayır
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
         chunks = chunk_text(content)
+        if not chunks:
+             raise ValueError("Dosya içeriği boş veya işlenemedi.")
         logger.info(f"{len(chunks)} parçaya ayrıldı.")
     except Exception as e:
         logger.error(f"Dosya okuma veya parçalama hatası: {e}")

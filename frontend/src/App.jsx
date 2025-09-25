@@ -38,7 +38,7 @@ const App = () => {
 
   useEffect(() => {
     fetchDocuments();
-    // İlk karşılama mesajı
+    // İlk karşılama mesajını ekle
     setMessages([{
       id: "intro",
       type: "assistant",
@@ -46,14 +46,18 @@ const App = () => {
     }]);
   }, []);
 
-  // Dosya sürükle-bırak işlevi
+  // Dosya sürükle-bırak işlevi için
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
         handleUpload(acceptedFiles[0]);
       }
     },
-    accept: { 'text/plain': ['.txt'] }
+    accept: { 
+      'text/plain': ['.txt'],
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+    }
   });
 
   // Doküman yükleme
@@ -209,7 +213,7 @@ const App = () => {
           <label htmlFor="file-upload" className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 cursor-pointer transition-colors duration-300">
             <UploadCloudIcon className="w-5 h-5 mr-2" />
             Yükle
-            <input id="file-upload" type="file" className="hidden" onChange={(e) => handleUpload(e.target.files[0])} accept=".txt" />
+            <input id="file-upload" type="file" className="hidden" onChange={(e) => handleUpload(e.target.files[0])} accept=".txt, .pdf, .docx" />
           </label>
         </div>
 
@@ -218,7 +222,7 @@ const App = () => {
           <input {...getInputProps()} />
           <UploadCloudIcon className="mx-auto h-12 w-12 text-gray-400" />
           <p className="mt-2 text-sm text-gray-600">
-            {isDragActive ? "Dosyayı buraya bırakın..." : "Dosyaları sürükleyip bırakın veya tıklayın"}
+            {isDragActive ? "Dosyayı buraya bırakın..." : "Dosyaları sürükleyip bırakın veya tıklayın (.txt, .pdf, .docx)"}
           </p>
           {uploadStatus && <p className={`mt-2 text-xs font-semibold ${uploadStatus.includes("Hata") ? "text-red-500" : "text-green-500"}`}>{uploadStatus}</p>}
         </div>

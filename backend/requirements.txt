@@ -13,3 +13,5 @@ sentence-transformers
 transformers
 torch==2.8.0
 google-generativeai
+pypdf
+python-docx
