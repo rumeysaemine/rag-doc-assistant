@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   FileTextIcon,
@@ -20,6 +20,14 @@ const App = () => {
   const [uploadStatus, setUploadStatus] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [docToDelete, setDocToDelete] = useState(null);
+
+  // Sohbet kutusu için referans oluştur
+  const messagesEndRef = useRef(null);
+
+  // Otomatik kaydırma fonksiyonu
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   // Dokümanları backend'den getirir
   const fetchDocuments = async () => {
@@ -45,6 +53,11 @@ const App = () => {
       text: "Merhaba! 😊 Dokümanlarınızı yükleyin ve bana soru sorun."
     }]);
   }, []);
+  
+  // Mesajlar her güncellendiğinde en alta kaydır
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Dosya sürükle-bırak işlevi için
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -244,7 +257,7 @@ const App = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-center text-gray-500 italic mt-8">Henüz yüklenmiş doküman yok.</p>
+            <p className="text-center text-gray-500 italic mt-8">Başlamak için bir doküman yükleyin 📄</p>
           )}
         </div>
       </div>
@@ -264,6 +277,8 @@ const App = () => {
               </div>
             </div>
           )}
+          {/* Bu div, sohbetin en altını temsil eder */}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Mesaj Yazma Alanı */}
