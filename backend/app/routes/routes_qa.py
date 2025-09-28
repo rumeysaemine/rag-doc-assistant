@@ -2,13 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import array
 from app.db.session import get_db
 from app.models.chunk import Chunk
 from app.models.document import Document 
-from app.services.embeddings import get_embedding
+from app.services.embeddings import get_embedding_async 
 from app.services.gemini import get_gemini_response
-from typing import List, Set, Tuple
+from typing import List, Set
 
 router = APIRouter()
 
@@ -23,16 +22,18 @@ class QueryResponse(BaseModel):
 async def query_documents(request: QueryRequest, db: AsyncSession = Depends(get_db)):
     """
     Kullanıcı sorgusuna en uygun cevabı bulmak için
-    Vektör arama ve Gemini API'yi kullanır. Kaynak olarak dosya adlarını döndürür.
+    Vektör arama (Kosinüs Benzerliği) ve Gemini API'yi kullanır. 
+    Kaynak olarak dosya adlarını döndürür.
     """
     try:
-        # 1. Sorgunun embedding'ini oluştur
-        query_embedding = get_embedding(request.query)
+        # 1. Sorgunun embedding'ini oluştur (Asenkron olarak thread havuzunda çalışır)
+        query_embedding = await get_embedding_async(request.query)
         
-        # 2. Vektör araması yap (L2 mesafesi ile en yakın 5 parçayı bul)
+        # 2. Vektör araması yap (Kosinüs Mesafesi <-> ile en yakın 5 parçayı bul)
+        # pgvector'da <-> operatörü Kosinüs Mesafesi (Cosine Distance) hesaplar.
         search_results = await db.execute(
             select(Chunk)
-            .order_by(Chunk.embedding.l2_distance(query_embedding))
+            .order_by(Chunk.embedding.op('<->')(query_embedding))
             .limit(5)
         )
         chunks = search_results.scalars().all()
@@ -40,7 +41,7 @@ async def query_documents(request: QueryRequest, db: AsyncSession = Depends(get_
         if not chunks:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Sorguyla ilgili herhangi bir bilgi bulunamadı."
+                detail="Sorguyla ilgili herhangi bir bilgi yüklenen dokümanlarda bulunamadı."
             )
 
         # 3. Bağlamı oluştur (parçaların içeriğini birleştir)
@@ -59,8 +60,12 @@ async def query_documents(request: QueryRequest, db: AsyncSession = Depends(get_
 
         # 5. Prompt'u Gemini için hazırla
         prompt = f"""
-        Aşağıdaki bağlamı kullanarak şu soruyu yanıtla: "{request.query}"
+        SEN BİR DOKÜMAN SORGULAMA ASİSTANISIN. Aşağıdaki 'Bağlam' bölümünde verilen bilgilere dayanarak, kullanıcının sorusunu yanıtla. 
+        Eğer bağlamda soruya cevap verecek yeterli bilgi yoksa, "Yüklenen dokümanlar içinde bu soruyu yanıtlayacak bilgi bulunmamaktadır." şeklinde yanıt ver.
         Cevaplarında markdown, LaTeX, kod bloğu, özel karakter (“ ”, **, \`\`, *) veya biçimlendirme kullanma. Sadece düz metin cümleleriyle yanıtla.
+
+        Soru: "{request.query}"
+
         Bağlam:
         {context}
         """
@@ -73,6 +78,8 @@ async def query_documents(request: QueryRequest, db: AsyncSession = Depends(get_
 
         return {"answer": answer, "sources": source_filenames}
 
+    except HTTPException:
+        raise 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

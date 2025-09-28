@@ -18,7 +18,7 @@ async def list_documents(db: AsyncSession = Depends(get_db)):
     
     # JSON serileştirmesi için uygun formata dönüştür
     return [
-        {"id": doc.id, "filename": doc.filename, "created_at": doc.created_at} 
+        {"id": doc.id, "filename": doc.filename, "created_at": doc.created_at, "status": doc.status} 
         for doc in documents
     ]
 
@@ -39,11 +39,9 @@ async def delete_document(document_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Document with id {document_id} not found."
         )
 
-    # Dokümanı veritabanından sil
-    await db.execute(
-        delete(Document).where(Document.id == document_id)
-    )
+    # Dokümanı veritabanından sil (ondelete="CASCADE" kullanıldığından chunks da silinir)
+    await db.delete(document)
     
     await db.commit()
     
-    return {"message": "Document deleted successfully."}
+    return
